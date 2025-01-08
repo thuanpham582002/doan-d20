@@ -1,0 +1,197 @@
+image: node:16-alpine
+
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  HELM_MANIFEST_REPO: http://${GITLAB_USER_NAME}:${GITLAB_USER_PASSWORD}@colima/ecommerce/helm-manifest.git
+  HELM_MANIFEST_BRANCH: main
+  TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+  TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID}
+  npm_config_cache: "$CI_PROJECT_DIR/.npm"
+
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - .npm/
+    - node_modules/
+    - package-lock.json
+
+.node_setup: &node_setup
+  - npm install
+  - npm install -g eslint
+  - npm install -g eslint-plugin-react eslint-plugin-react-hooks
+
+stages:
+  - test
+  - build
+  - security
+  - deploy
+  - notify
+
+# Testing
+test:
+  stage: test
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+  script:
+    - *node_setup
+    - npm run test -- --coverage --watchAll=false --ci
+  artifacts:
+    when: always
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
+      junit: coverage/junit.xml
+    paths:
+      - coverage/
+    expire_in: 1 week
+
+lint:
+  stage: test
+  script:
+    - *node_setup
+    - npx eslint --max-warnings 0 'src/**/*.{js,jsx}' -f json -o eslint-report.json || true
+  artifacts:
+    when: always
+    paths:
+      - eslint-report.json
+    reports:
+      codequality: eslint-report.json
+    expire_in: 1 week
+    
+# Security Scanning
+dependency-scan:
+  stage: security
+  script:
+    - npm install
+    # - npm install -g snyk
+    # - snyk test --json > snyk-report.json || true
+    - npm audit --json > npm-audit.json || true
+  artifacts:
+    when: always
+    paths:
+      - snyk-report.json
+      - npm-audit.json
+    reports:
+      dependency_scanning: snyk-report.json
+    expire_in: 1 month
+  allow_failure: true
+
+sast:
+  stage: security
+  image: returntocorp/semgrep
+  variables:
+    SECURE_LOG_LEVEL: "debug"
+    SEMGREP_RULES: "auto"
+    SEMGREP_METRICS: "off"
+  script:
+    - semgrep ci --json --output gl-sast-report.json --config auto --disable-version-check || exit 0
+  artifacts:
+    when: always
+    paths:
+      - gl-sast-report.json
+    reports:
+      sast: gl-sast-report.json
+    expire_in: 1 month
+  rules:
+    - when: always
+  allow_failure: true
+
+# Container Security
+container-scan:
+  image: 
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  stage: security
+  variables:
+    TRIVY_NO_PROGRESS: "true"
+    TRIVY_CACHE_DIR: ".trivycache/"
+  script:
+    - trivy image --format json --output trivy-report.json frontend:$CI_COMMIT_SHA || true
+    - trivy image --format template --template "@contrib/html.tpl" -o trivy-report.html frontend:$CI_COMMIT_SHA || true
+  artifacts:
+    when: always
+    paths:
+      - trivy-report.json
+    reports:
+      container_scanning: trivy-report.json
+    expire_in: 1 month
+  cache:
+    paths:
+      - .trivycache/
+  allow_failure: true
+
+# Build
+build:
+  image: docker:20.10.16
+  stage: build
+  services:
+    - docker:20.10.16-dind
+  script:
+    - docker build -t frontend:$CI_COMMIT_SHA .
+    - docker tag frontend:$CI_COMMIT_SHA colima:5000/frontend:$CI_COMMIT_SHA
+    - docker push colima:5000/frontend:$CI_COMMIT_SHA
+
+# Deploy
+deploy:
+  stage: deploy
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git yq
+    - git config --global user.email "gitlab@example.com"
+    - git config --global user.name "GitLab CI"
+  script:
+    - git clone $HELM_MANIFEST_REPO helm-manifests || exit 1
+    - cd helm-manifests
+    - |
+      # Update frontend image tag in values file
+      if [ -f "values.yaml" ]; then
+        yq e ".frontend.image.tag = \"$CI_COMMIT_SHA\"" -i values.yaml
+        # Verify the update
+        if ! yq e ".frontend.image.tag" values.yaml | grep -q "$CI_COMMIT_SHA"; then
+          echo "Failed to update values.yaml"
+          exit 1
+        fi
+      else
+        echo "values.yaml not found at expected path"
+        exit 1
+      fi
+    - |
+      # Commit and push changes
+      git add values.yaml
+      git commit -m "Update frontend image to $CI_COMMIT_SHA"
+      git push origin $HELM_MANIFEST_BRANCH || {
+        echo "Failed to push changes"
+        exit 1
+      }
+  only:
+    - main
+
+# Notify
+notify_success:
+  stage: notify
+  image: curlimages/curl:latest
+  script:
+    - |
+      MESSAGE="✅ Frontend Pipeline Success"
+      curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+        -d "chat_id=$TELEGRAM_CHAT_ID" \
+        -d "text=$MESSAGE" \
+        -d "parse_mode=HTML" || true
+  rules:
+    - when: on_success
+      allow_failure: true
+
+notify_failure:
+  stage: notify
+  image: curlimages/curl:latest
+  script:
+    - |
+      MESSAGE="❌ Frontend Pipeline Failed"
+      curl -s -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+        -d "chat_id=$TELEGRAM_CHAT_ID" \
+        -d "text=$MESSAGE" \
+        -d "parse_mode=HTML" || true
+  rules:
+    - when: on_failure
+      allow_failure: true 

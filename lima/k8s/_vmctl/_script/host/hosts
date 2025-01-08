@@ -1,0 +1,10 @@
+192.168.105.20 gitlab.noroom113.com
+192.168.105.21 database.noroom113.com
+192.168.105.22 registry.noroom113.com
+192.168.105.23 sonarqube.noroom113.com
+192.168.105.31 frontend_server.noroom113.com
+192.168.105.30 backend_server.noroom113.com
+192.168.105.21 database_server.noroom113.com
+192.168.105.33 build_artifactory_server.noroom113.com
+192.168.105.40 buildkit_server.noroom113.com
+192.168.105.49 argocd.noroom113.com

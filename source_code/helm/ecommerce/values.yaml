@@ -1,0 +1,90 @@
+# Global values
+global:
+  environment: development
+# Frontend Configuration
+frontend:
+  name: frontend
+  replicaCount: 1
+  image:
+    repository: colima:5000/frontend
+    tag: 15db31b968b93e0cebe4337b885d8e05232b0aa5
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 3000
+    nodePort: 30000
+  resources:
+    limits:
+      cpu: 300m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+# Backend Configuration
+backend:
+  name: backend
+  replicaCount: 1
+  image:
+    repository: colima:5000/backend
+    tag: 3436dac40cac93937a47df8879c84abe195e4164
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 5000
+    nodePort: 30001
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 200m
+      memory: 256Mi
+  env:
+    JWT_SECRET_KEY: your-secret-key
+# MySQL Configuration
+mysql:
+  auth:
+    rootPassword: rootpassword
+    database: ecommerce
+    username: ecommerce_user
+    password: ecommerce_password
+  primary:
+    persistence:
+      size: 1Gi
+# MongoDB Configuration
+mongodb:
+  auth:
+    rootPassword: rootpassword
+    username: root
+    password: rootpassword
+    database: ecommerce
+  persistence:
+    size: 1Gi
+# RabbitMQ Configuration
+rabbitmq:
+  auth:
+    username: admin
+    password: admin_password
+  persistence:
+    size: 1Gi
+# Common Configurations
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+  hosts:
+    - host: ecommerce.local
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: frontend
+              port: 3000
+        - path: /api
+          pathType: Prefix
+          backend:
+            service:
+              name: backend
+              port: 5000

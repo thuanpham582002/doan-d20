@@ -1,0 +1,26 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+metadata:
+  name: ecommere
+build:
+  artifacts:
+    - image: frontend
+      context: ./frontend
+    - image: backend
+      context: ./backend
+deploy:
+  helm:
+    releases:
+      - name: ecommere-chart
+        chartPath: ecommere-chart
+        setValueTemplates:
+          frontend.image.repository: "{{.IMAGE_REPO_frontend}}"
+          frontend.image.tag: "{{.IMAGE_TAG_frontend}}@{{.IMAGE_DIGEST_frontend}}"
+          backend.image.repository: "{{.IMAGE_REPO_backend}}"
+          backend.image.tag: "{{.IMAGE_TAG_backend}}@{{.IMAGE_DIGEST_backend}}"
+        setValues:
+          frontend.image.pullPolicy: "Always"
+          backend.image.pullPolicy: "Always"
+        skipBuildDependencies: true
+        recreatePods: true
+        upgradeOnChange: true

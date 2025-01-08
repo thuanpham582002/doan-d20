@@ -1,0 +1,29 @@
+# This template requires Lima v0.7.0 or later.
+images:
+  # Fallback to the latest release image.
+  # Hint: run `limactl prune` to invalidate the cache
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release-20241004/ubuntu-24.04-server-cloudimg-amd64.img"
+    arch: "x86_64"
+    digest: "sha256:fad101d50b06b26590cf30542349f9e9d3041ad7929e3bc3531c81ec27f2c788"
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release-20241004/ubuntu-24.04-server-cloudimg-arm64.img"
+    arch: "aarch64"
+    digest: "sha256:e380b683b0c497d2a87af8a5dbe94c42eb54548fa976167f307ed8cf3944ec57"
+
+mounts:
+  - location: "~"
+    writable: true
+  - location: "/tmp/lima"
+    writable: true
+  - location: "/Users/noroom113/IdeaProjects/final-project-b20dccn678_thuanpt/lima/immutable/resource/gitlab/cert"
+    mountPoint: "/etc/gitlab/ssl"
+    writable: false
+
+cpus: 4
+memory: 6GiB
+disk: 20GiB
+networks:
+  - lima: shared
+
+caCerts:
+  files:
+    - "/Users/noroom113/IdeaProjects/final-project-b20dccn678_thuanpt/lima/certificate_crt/rootCA.crt"

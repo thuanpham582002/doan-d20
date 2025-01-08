@@ -1,0 +1,112 @@
+k8s_control_plane:
+  master_node1:
+    name: master-node1
+    staticIp: 192.168.105.51
+    template: vm_config.yaml
+    initScript:
+      update_host:
+        onBoot: true
+        command: "_script/host/update_host.sh"
+      install_cri:
+        command: "_script/cri/install_crio.sh"
+      install_kubeadm_kubectl_kubelet:
+        command: "_script/kubeadm/install_kubeadm_kubectl_kubelet.sh"
+      init_control_plan:
+        command: "_script/kubeadm/init_control_plan.sh"
+        envs:
+          - name: CONTROL_PLANE_IP
+            value: k8s_control_plane.master_node1.staticIp
+          - name: CONTROL_PLANE_NAME
+            value: k8s_control_plane.master_node1.name
+      install_helm3:
+        command: "_script/helm/install_helm3.sh"
+      install_cni_plugins:
+        command: "_script/k8s/cni-plugins/install_flannel.sh"
+      install_nfs_client:
+        command: "_script/nfs/install_nfs_client.sh"
+      install_nfs_provisioner:
+        command: "_script/k8s/nfs-provisioner/install_nfs_provisioner.sh"
+      install_ingress_nginx:
+        command: "_script/k8s/nginx-controller/install_ingress_nginx.sh"
+      install_cert_manager:
+        command: "_script/k8s/cert-manager/install_cert_manager.sh"
+      install_argocd:
+        command: "_script/k8s/argocd/install_argocd.sh"
+
+k8s_worker:
+  worker1:
+    name: worker-1
+    staticIp: 192.168.105.53
+    template: vm_config.yaml
+    initScript:
+      update_host:
+        onBoot: true
+        command: "_script/host/update_host.sh"
+      install_cri:
+        command: "_script/cri/install_crio.sh"
+      install_kubeadm_kubectl_kubelet:
+        command: "_script/kubeadm/install_kubeadm_kubectl_kubelet.sh"
+      join_control_plan:
+        command: "_script/kubeadm/join_control_plan.sh"
+        envs:
+          - name: WORKER_NAME
+            value: k8s_worker.worker1.name
+          - name: WORKER_IP
+            value: k8s_worker.worker1.staticIp
+      install_nfs_client:
+        command: "_script/nfs/install_nfs_client.sh"
+  worker2:
+    name: worker-2
+    staticIp: 192.168.105.54
+    template: vm_config.yaml
+    initScript:
+      update_host:
+        onBoot: true
+        command: "_script/host/update_host.sh"
+      install_cri:
+        command: "_script/cri/install_crio.sh"
+      install_kubeadm_kubectl_kubelet:
+        command: "_script/kubeadm/install_kubeadm_kubectl_kubelet.sh"
+      join_control_plan:
+        command: "_script/kubeadm/join_control_plan.sh"
+        envs:
+          - name: WORKER_NAME
+            value: k8s_worker.worker2.name
+          - name: WORKER_IP
+            value: k8s_worker.worker2.staticIp
+      install_nfs_client:
+        command: "_script/nfs/install_nfs_client.sh"
+
+nfs:
+  nfs_server:
+    staticIp: 192.168.105.60
+    template: vm_config.yaml
+    initScript:
+      update_host:
+        onBoot: true
+        command: "_script/host/update_host.sh"
+      install_nfs:
+        command: "_script/nfs/install_nfs.sh"
+load_balancer:
+  nginx_lb:
+    staticIp: 192.168.105.49
+    template: vm_config.yaml
+    initScript:
+      update_host:
+        onBoot: true
+        command: "_script/host/update_host.sh"
+      install_nginx:
+        command: "_script/nginx/install_nginx.sh"
+      install_lb_config:
+        command: "_script/nginx/install_lb_config.sh"
+gitlab_runner:
+  gitlab_docker_runner:
+    name: gitlab-docker-runner
+    staticIp: 192.168.105.40
+    template: template/gitlab_runner_docker.yaml
+    initScript:
+      update_host:
+        onBoot: true
+        command: "_script/host/update_host.sh"
+      install_gitlab_runner:
+          command: "_script/gitlab-runner/install_gitlab_runner.sh"

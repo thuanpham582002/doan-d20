@@ -1,0 +1,1 @@
+helm delete cert-manager -n cert-manager

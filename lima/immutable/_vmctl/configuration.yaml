@@ -1,0 +1,42 @@
+scm:
+  gitlab:
+    staticIp: 192.168.105.20
+    template: template/gitlab_vm_config.yaml
+    initScript:
+      install_gitlab_ee:
+        command: "_script/install_gitlab_ee.sh"
+      reconfig_gitlab_ee:
+        command: "_script/reconfig_gitlab_ee.sh"
+database:
+  sql_server:
+    staticIp: 192.168.105.21
+    template: template/database_vm_config.yaml
+    initScript:
+      install_sql_server:
+        command: "_script/database/install_sql_server.sh"
+      # install_cloud_beaver:
+      #   command: "_script/database/install_cloud_beaver.sh"
+registry:
+  registry_server:
+    staticIp: 192.168.105.22
+    template: template/database_vm_config.yaml
+    initScript:
+      install_registry_server:
+        command: "_script/install_registry_server.sh"
+
+sonarqube:
+  sonarqube_server:
+    staticIp: 192.168.105.23
+    template: template/sonarqube_vm_config.yaml
+    initScript:
+      update_host:
+        onBoot: true
+        command: "/Users/noroom113/IdeaProjects/final-project-b20dccn678_thuanpt/lima/k8s/_vmctl/_script/host/update_host.sh"
+      install_k3s:
+        command: "/Users/noroom113/IdeaProjects/final-project-b20dccn678_thuanpt/lima/immutable/_vmctl/_script/sonarqube/install_k3s.sh"
+      install_helm:
+        command: "/Users/noroom113/IdeaProjects/final-project-b20dccn678_thuanpt/lima/immutable/_vmctl/_script/sonarqube/install_helm.sh"
+      install_nginx:
+        command: "/Users/noroom113/IdeaProjects/final-project-b20dccn678_thuanpt/lima/immutable/_vmctl/_script/sonarqube/install_nginx.sh"
+      install_sonarqube_server:
+        command: "/Users/noroom113/IdeaProjects/final-project-b20dccn678_thuanpt/lima/immutable/_vmctl/_script/sonarqube/install_sonarqube_server.sh"

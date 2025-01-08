@@ -1,0 +1,72 @@
+general:
+  artifactory:
+    static_ip: 192.168.105.32
+    template: template/vm_config.yaml
+    init_script:
+      config_static_ip:
+        on_boot: true
+        command: "_script/config_static_ip.sh"
+        envs:
+          - name: STATIC_IP
+            value: general.artifactory.static_ip
+            type: config
+      install_jfog_artifactory:
+        command: "_script/install_jfrog_registry.sh"
+  build_artifactory: #Use buildKit
+    static_ip: 192.168.105.33
+    template: template/vm_config.yaml
+    init_script:
+      config_static_ip:
+        command: "_script/config_static_ip.sh"
+        envs:
+          - name: STATIC_IP
+            value: general.build_artifactory.static_ip
+            type: config
+      install_gitlab_runner:
+        command: "_script/install_gitlab_runner.sh"
+  scan_server: # User docker server.
+    static_ip: 192.168.105.34
+    template: template/vm_config.yaml
+    init_script:
+      config_static_ip:
+        on_boot: true
+        command: "_script/config_static_ip.sh"
+        envs:
+          - name: STATIC_IP
+            value: general.scan_server.static_ip
+            type: config
+        install_gitlab_runner:
+          command: "_script/install_gitlab_runner.sh"
+
+service:
+  backend:
+    static_ip: 192.168.105.30
+    template: template/vm_config.yaml
+    init_script:
+      config_static_ip:
+        on_boot: true
+        command: "_script/config_static_ip.sh"
+        envs:
+          - name: STATIC_IP
+            value: service.backend.static_ip
+            type: config
+      install_dot_net6:
+        command: "_script/install_dot_net6.sh"
+      install_gitlab_runner:
+        command: "_script/install_gitlab_runner.sh"
+  frontend:
+    static_ip: 192.168.105.31
+    template: template/vm_config.yaml
+    init_script:
+      config_static_ip:
+        command: "_script/config_static_ip.sh"
+        envs:
+          - name: STATIC_IP
+            value: service.frontend.static_ip
+            type: config
+        install_nodejs:
+          command: "_script/install_nodejs.sh"
+        install_pm2:
+          command: "_script/install_pm2.sh"
+        install_gitlab_runner:
+          command: "_script/install_gitlab_runner.sh"

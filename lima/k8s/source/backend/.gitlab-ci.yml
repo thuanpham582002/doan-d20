@@ -1,0 +1,195 @@
+# Base image and service configuration
+default:
+  image: docker:24.0.5
+  services:
+    - docker:24.0.5-dind
+
+# Global variables
+variables:
+  SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+  GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+
+  # Docker configuration
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_REGISTRY: "registry.noroom113.com"
+  DOCKER_REPOSITORY: ecommerce_k8s
+  
+  # Project configuration
+  PROJECT_NAME: ${CI_PROJECT_NAME}
+  ENVIRONMENT: ${CI_COMMIT_REF_NAME}
+  
+  # Report names
+  ARACHNI_WEBSITE_REPORT: "security_scan_website_${CI_PROJECT_NAME}_${CI_COMMIT_REF_NAME}_${CI_COMMIT_SHORT_SHA}_report"
+  K6_PERFORMACE_TEST_REPORT: "performace_test_${CI_PROJECT_NAME}_${CI_COMMIT_REF_NAME}_${CI_COMMIT_SHORT_SHA}_report"
+  TRIVYFS_REPORT: "trivy_fs_${CI_PROJECT_NAME}_${CI_COMMIT_REF_NAME}_${CI_COMMIT_SHORT_SHA}_report"
+
+  # ArgoCD configuration
+  GITOPS_REPO: "git@github.com:your-org/gitops-repo.git"
+  GITOPS_BRANCH: "main"
+
+# Stages definition
+stages:
+  - build
+  - test
+  - sonarqube-check
+  - security
+  - update-manifest
+  - performance
+  - notify
+
+# Job templates
+.docker-login:
+  before_script:
+    - docker login $DOCKER_REGISTRY -u $REGISTRY_USER -p $REGISTRY_PASSWORD
+
+# Build stage
+build:
+ extends: .docker-login
+ stage: build
+ script:
+   - docker build . -t $PROJECT_NAME:$CI_COMMIT_SHORT_SHA
+   - docker tag $PROJECT_NAME:$CI_COMMIT_SHORT_SHA $DOCKER_REGISTRY/$DOCKER_REPOSITORY/$PROJECT_NAME:$CI_COMMIT_SHORT_SHA
+   - docker push $DOCKER_REGISTRY/$DOCKER_REPOSITORY/$PROJECT_NAME:$CI_COMMIT_SHORT_SHA
+   - |
+     if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+       docker tag $PROJECT_NAME:$CI_COMMIT_SHORT_SHA $DOCKER_REGISTRY/$DOCKER_REPOSITORY/$PROJECT_NAME:latest
+       docker push $DOCKER_REGISTRY/$DOCKER_REPOSITORY/$PROJECT_NAME:latest
+     fi
+ tags:
+   - docker
+
+# Test stage
+test:
+  image: mcr.microsoft.com/dotnet/sdk:6.0
+  stage: test
+  script:
+    - echo "Running tests..."
+    - echo "Tests passed successfully!"
+
+sonarqube-check:
+  image: mcr.microsoft.com/dotnet/sdk:6.0
+  stage: sonarqube-check
+
+  script:
+    - "dotnet tool install --global dotnet-sonarscanner"
+    - "export PATH=\"$PATH:$HOME/.dotnet/tools\""
+    - "dotnet sonarscanner begin /k:\"ecommerce_k8s_backend_453a2566-5119-4531-833a-d271b44b661f\" /d:sonar.token=\"$SONAR_TOKEN\" /d:\"sonar.host.url=$SONAR_HOST_URL\" "
+    - "dotnet build"
+    - "dotnet sonarscanner end /d:sonar.token=\"$SONAR_TOKEN\""
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+    - if: $CI_COMMIT_BRANCH == 'master'
+    - if: $CI_COMMIT_BRANCH == 'main'
+    - if: $CI_COMMIT_BRANCH == 'develop'
+
+# Update Helm Chart
+update-helm-chart:
+  stage: update-manifest
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache git openssh
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - ssh-keyscan gitlab.noroom113.com >> ~/.ssh/known_hosts
+  script:
+    - git clone git@gitlab.noroom113.com:ecommerce_k8s/ecommere_chart.git
+    - cd ecommere_chart
+    - |
+      # if [[ "$CI_COMMIT_REF_NAME" == "main" ]]; then
+      sed -i "s/tag:.*/tag: \"${CI_COMMIT_SHORT_SHA}\"/" charts/backend/values.yaml
+      # fi
+    - git config --global user.email "gitlab@example.com"
+    - git config --global user.name "GitLab CI"
+    - git add .
+    - git commit -m "Update backend image tag to ${CI_COMMIT_SHORT_SHA}"
+    - git push git@gitlab.noroom113.com:ecommerce_k8s/ecommere_chart.git main
+  tags:
+    - docker
+
+trivy-scan:
+  stage: security
+  image:
+    name: docker.io/aquasec/trivy:latest
+    entrypoint: [""]
+
+  before_script:
+    - ls -la
+  script:
+    - trivy image --exit-code 0 --severity MEDIUM,HIGH,CRITICAL --format template --template "@/contrib/html.tpl" --output "${CI_PROJECT_DIR}/${TRIVYFS_REPORT}.html" "${PROJECT_NAME}:${CI_COMMIT_SHORT_SHA}"
+  artifacts:
+    paths:
+      - "${CI_PROJECT_DIR}/${TRIVYFS_REPORT}.html"
+    expire_in: 1 week
+  tags:
+    - docker
+
+## Security stage
+#arachni-scan:
+#  stage: security
+#  script:
+#    - |
+#      if [ -z "$ADDRESS_FRONTEND" ]; then
+#        echo "ADDRESS_FRONTEND is not set. Skipping security scan."
+#        exit 0
+#      fi
+#    - docker run --rm -v $(pwd):/scan noroom113/arachni:v1.4-0.5.10 \
+#      bin/arachni --output-verbose \
+#      --scope-include-subdomains $ADDRESS_FRONTEND \
+#      --report-save-path=/scan/$ARACHNI_WEBSITE_REPORT.afr
+#    - docker run --rm -v $(pwd):/scan noroom113/arachni:v1.4-0.5.10 \
+#      bin/arachni_reporter /scan/$ARACHNI_WEBSITE_REPORT.afr \
+#      --reporter=html:outfile=/scan/$ARACHNI_WEBSITE_REPORT.html.zip
+#  artifacts:
+#    paths:
+#      - $ARACHNI_WEBSITE_REPORT.html.zip
+#    expire_in: 1 week
+#  tags:
+#    - docker
+
+## Performance stage
+#k6-performance:
+#  stage: performance
+#  script:
+#    - chmod -R 777 ./performace_testing_script/
+#    - docker run --rm \
+#      -v $(pwd)/performace_testing_script:/scripts \
+#      -e K6_OUT=json=/scripts/results.json \
+#      loadimpact/k6 run /scripts/smoke-test.js
+#    - mv ./performace_testing_script/summary.html $K6_PERFORMACE_TEST_REPORT.html
+#  artifacts:
+#    paths:
+#      - $K6_PERFORMACE_TEST_REPORT.html
+#    reports:
+#      performance: performace_testing_script/results.json
+#    expire_in: 1 week
+#  tags:
+#    - docker
+#
+## Notify stage
+#notify:
+#  stage: notify
+#  script:
+#    - |
+#      if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+#        echo "Telegram credentials not set. Skipping notification."
+#        exit 0
+#      fi
+#    - |
+#      MESSAGE="Pipeline Status for $CI_PROJECT_NAME
+#      Branch: $CI_COMMIT_REF_NAME
+#      Commit: $CI_COMMIT_SHA
+#      Image Tag: $CI_COMMIT_SHORT_SHA
+#      Status: $CI_JOB_STATUS
+#      Pipeline: $CI_PIPELINE_URL"
+#    - |
+#      curl -s -X POST https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage \
+#        -d chat_id=$TELEGRAM_CHAT_ID \
+#        -d text="$MESSAGE" \
+#        -d parse_mode=markdown
+#  rules:
+#    - if: $CI_PIPELINE_SOURCE == "push"
+#      when: always
+#  tags:
+#    - docker

@@ -1,0 +1,9 @@
+dependencies:
+- name: mysql
+  repository: https://charts.bitnami.com/bitnami
+  version: 9.10.4
+- name: mongodb
+  repository: https://groundhog2k.github.io/helm-charts/
+  version: 0.7.0
+digest: sha256:b36057649f6244637fde879d02c6ef18700f9769120f55002a8fa15d58f8dc0d
+generated: "2024-12-30T09:38:57.904635+07:00"

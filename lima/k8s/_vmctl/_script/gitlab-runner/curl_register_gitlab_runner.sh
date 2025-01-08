@@ -1,0 +1,14 @@
+sudo gitlab-runner register \
+  --url https://gitlab.noroom113.com/ \
+  --registration-token GR1348941HAoeUT1oCyYU7i5QEphm \
+  --executor docker \
+  --docker-image "docker:24.0.5" \
+  --docker-privileged \
+  --description "docker-runner" \
+  --tag-list "docker" \
+  --run-untagged="true" \
+  --docker-network-mode "host" \
+  --docker-extra-hosts "gitlab.noroom113.com:192.168.105.20" \
+  --docker-extra-hosts "sonarqube.noroom113.com:192.168.105.23" \
+  --docker-pull-policy="if-not-present" \
+  --docker-volumes "/var/run/docker.sock:/var/run/docker.sock"
